@@ -19,7 +19,6 @@ namespace AzureSearchBackupRestore
 {
     class Program
     {
-
         private static string SourceSearchServiceName;
         private static string SourceAdminKey;
         private static string SourceIndexName;
@@ -35,6 +34,7 @@ namespace AzureSearchBackupRestore
 
         private static int MaxBatchSize = 500;          // JSON files will contain this many documents / file and can be up to 1000
         private static int ParallelizedJobs = 10;       // Output content in parallel jobs
+        private static string MainSearchFilter = "libraryId eq 'c0d05462-bed8-4eff-a782-8d77daaf8d8e'";
 
         static void Main(string[] args)
         {
@@ -49,8 +49,8 @@ namespace AzureSearchBackupRestore
 
             //Recreate and import content to target index
             Console.WriteLine("\nSTART INDEX RESTORE");
-            DeleteIndex();
-            CreateTargetIndex();
+            //DeleteIndex();
+            //CreateTargetIndex();
             ImportFromJSON();
             Console.WriteLine("\r\n  Waiting 10 seconds for target to index content...");
             Console.WriteLine("  NOTE: For really large indexes it may take longer to index all content.\r\n");
@@ -135,6 +135,29 @@ namespace AzureSearchBackupRestore
             return;
         }
 
+        private static string[] toIgnore = new string[] {"cognitiveTextInDocument",
+            "cognitiveTags",
+            "cognitiveTagsWithConfidence",
+            "brandedPortals",
+            "accessControl",
+            "assetAccessControl",
+            "assetAccessControl_v2",
+            "assetAccessControl_v3",
+            "assetAccessControl_v4",
+            "assetAccessControl_v5",
+            "assetAccessControl_v6",
+            "assetAccessControl_v7",
+            "assetAccessControl_v8",
+            "assetAccessControl_v9",
+            "assetAccessControl_v10",
+            "assetAccessControl_v11",
+            "categoryMetadata_v1",
+            "categoryMetadata_v4",
+            "categoryMetadata_v5",
+            "categoryMetadata",
+            "assetCategoryMetadata"
+        };
+
         static void ExportToJSON(int Skip, string IDFieldName, string FileName)
         {
             // Extract all the documents from the selected index to JSON files in batches of 500 docs / file
@@ -145,6 +168,7 @@ namespace AzureSearchBackupRestore
                 {
                     SearchMode = SearchMode.All,
                     Size = MaxBatchSize,
+                    Filter = MainSearchFilter,
                     Skip = Skip
                 };
 
@@ -152,11 +176,18 @@ namespace AzureSearchBackupRestore
 
                 foreach (var doc in response.GetResults())
                 {
-                    json += JsonSerializer.Serialize(doc.Document) + ",";
+                    /*json += JsonSerializer.Serialize(doc.Document) + ",";
                     json = json.Replace("\"Latitude\":", "\"type\": \"Point\", \"coordinates\": [");
                     json = json.Replace("\"Longitude\":", "");
                     json = json.Replace(",\"IsEmpty\":false,\"Z\":null,\"M\":null,\"CoordinateSystem\":{\"EpsgId\":4326,\"Id\":\"4326\",\"Name\":\"WGS84\"}", "]");
                     json += "\r\n";
+                    */
+
+
+                    var schema2 = JsonSerializer.Deserialize<Dictionary<string, object>>(JsonSerializer.Serialize(doc.Document));
+                    var query = schema2.Where(x => !x.Key.StartsWith("custom_") && !toIgnore.Contains(x.Key));
+                    var newJson = JsonSerializer.Serialize(new Dictionary<string, object>(query.ToList()));
+                    json += newJson + ",\r\n";
                 }
 
                 // Output the formatted content to a file
@@ -280,7 +311,8 @@ namespace AzureSearchBackupRestore
                 SearchOptions options = new SearchOptions()
                 {
                     SearchMode = SearchMode.All,
-                    IncludeTotalCount = true
+                    IncludeTotalCount = true,
+                    Filter = MainSearchFilter
                 };
 
                 SearchResults<Dictionary<string, object>> response = searchClient.Search<Dictionary<string, object>>("*", options);
@@ -310,6 +342,7 @@ namespace AzureSearchBackupRestore
                     string json = File.ReadAllText(fileName);
                     Uri uri = new Uri(ServiceUri, "/indexes/" + TargetIndexName + "/docs/index");
                     HttpResponseMessage response = AzureSearchHelper.SendSearchRequest(HttpClient, HttpMethod.Post, uri, json);
+                    var result = response.Content.ReadAsStringAsync().GetAwaiter().GetResult();
                     response.EnsureSuccessStatusCode();
                 }
             }
