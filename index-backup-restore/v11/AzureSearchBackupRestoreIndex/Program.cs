@@ -44,14 +44,16 @@ namespace AzureSearchBackupRestore
             ConfigurationSetup();
 
             //Backup the source index
-            Console.WriteLine("\nSTART INDEX BACKUP");
-            BackupIndexAndDocuments();
+            //Console.WriteLine("\nSTART INDEX BACKUP");
+            //BackupIndexAndDocuments();
 
             //Recreate and import content to target index
             Console.WriteLine("\nSTART INDEX RESTORE");
-            //DeleteIndex();
-            //CreateTargetIndex();
-            ImportFromJSON();
+            DeleteIndex();
+            CreateTargetIndex();
+            //ImportFromJSON();
+            ImportFromJSON("C:\\bkp\\brokeleocorrea-rex-cognitive\\data-local-3assets");
+            ImportFromJSON("C:\\bkp\\brokeleocorrea-rex-cognitive\\data-full-1022-03-16");
             Console.WriteLine("\r\n  Waiting 10 seconds for target to index content...");
             Console.WriteLine("  NOTE: For really large indexes it may take longer to index all content.\r\n");
             Thread.Sleep(10000);
@@ -326,7 +328,7 @@ namespace AzureSearchBackupRestore
             return -1;
         }
 
-        static void ImportFromJSON()
+        static void ImportFromJSON(string folderName = null)
         {
             Console.WriteLine("\n  Upload index documents from saved JSON files");
             // Take JSON file and import this as-is to target index
@@ -336,7 +338,11 @@ namespace AzureSearchBackupRestore
 
             try
             {
-                foreach (string fileName in Directory.GetFiles(BackupDirectory, SourceIndexName + "*.json"))
+                var files = Directory.GetFiles(BackupDirectory, SourceIndexName + "*.json");
+                if (!string.IsNullOrEmpty(folderName))
+                    files = Directory.GetFiles(folderName, SourceIndexName + "*.json");
+
+                foreach (string fileName in files)
                 {
                     Console.WriteLine("  -Uploading documents from file {0}", fileName);
                     string json = File.ReadAllText(fileName);
